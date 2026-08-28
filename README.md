@@ -55,4 +55,4 @@ vercel deploy
 
 ## Licence
 
-GPL-3.0-or-later, 见 [LICENSE](LICENSE)。
+[LICENSE](LICENSE)
