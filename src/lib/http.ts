@@ -145,7 +145,10 @@ export async function fetchWithJar(
     const provided = reqHeaders["cookie"] ?? reqHeaders["Cookie"];
     reqHeaders["cookie"] = provided ? `${existing}; ${provided}` : existing;
   }
-  if (options.body !== undefined && !reqHeaders["content-type"]) {
+  const hasContentType = Object.keys(reqHeaders).some(
+    (k) => k.toLowerCase() === "content-type"
+  );
+  if (options.body !== undefined && !hasContentType) {
     reqHeaders["content-type"] = "application/x-www-form-urlencoded";
   }
 
