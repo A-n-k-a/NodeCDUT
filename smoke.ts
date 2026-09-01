@@ -6,6 +6,10 @@ import {
   parseLegacySchedule,
 } from "./src/services/jw.js";
 import { CookieJar } from "./src/lib/http.js";
+import {
+  routeElectricityChannel,
+  buildCashierUrl,
+} from "./src/services/elec.js";
 
 let failures = 0;
 function check(name: string, cond: boolean, extra?: unknown) {
@@ -95,6 +99,36 @@ check(
     legacy[1]?.date === "2024-09-03" &&
     legacy[1]?.indexInDay === 0,
   legacy[0]
+);
+
+// 6. 电费通道路由 (校方规则)
+check("elec-route-芙蓉照明", routeElectricityChannel("芙蓉园", "照明").factoryCode === "E016");
+check("elec-route-芙蓉空调", routeElectricityChannel("芙蓉园", "空调").factoryCode === "E016");
+check("elec-route-香樟空调", routeElectricityChannel("香樟园", "空调").factoryCode === "E016");
+check("elec-route-珙桐照明", routeElectricityChannel("珙桐园", "照明").factoryCode === "E017");
+check("elec-route-珙桐空调", routeElectricityChannel("珙桐园", "空调").factoryCode === "E034");
+check("elec-route-榕树照明", routeElectricityChannel("榕树园", "照明").factoryCode === "E016");
+check("elec-route-榕树空调", routeElectricityChannel("榕树园", "空调").factoryCode === "E034");
+check("elec-route-松林照明", routeElectricityChannel("松林园", "照明").factoryCode === "E016");
+check("elec-route-松林空调", routeElectricityChannel("松林园", "空调").factoryCode === "E034");
+check("elec-route-银杏1照明", routeElectricityChannel("银杏园", "照明", 1).factoryCode === "E016");
+check("elec-route-银杏3照明", routeElectricityChannel("银杏园", "照明", 3).factoryCode === "E016");
+check("elec-route-银杏1空调", routeElectricityChannel("银杏园", "空调", 1).factoryCode === "E034");
+check("elec-route-银杏2照明", routeElectricityChannel("银杏园", "照明", 2).factoryCode === "E034");
+check("elec-route-银杏4空调", routeElectricityChannel("银杏园", "空调", 4).factoryCode === "E034");
+{
+  let threw = false;
+  try {
+    routeElectricityChannel("银杏园", "照明");
+  } catch {
+    threw = true;
+  }
+  check("elec-route-银杏缺栋号报错", threw);
+}
+check(
+  "elec-cashier-url",
+  buildCashierUrl("PROJ", "ORDER") ===
+    "https://paym.cdut.edu.cn/mobile/#/person?projectId=PROJ&orderId=ORDER"
 );
 
 process.exit(failures ? 1 : 0);
