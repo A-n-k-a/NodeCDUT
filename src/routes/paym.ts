@@ -5,7 +5,6 @@ import {
   createPayTrade,
   getAllProjects,
   getOrderById,
-  getTradeChannels,
   getUserInfo,
   isOrderUnpaid,
   listOrders,
@@ -273,8 +272,10 @@ paym.post("/electricity/route", async (c) => {
  * amount 单位为元; buyerId 缺省取会话中的 studentId。
  * closePrevious=true 时先自动关闭本项目下的未完成订单再创建;
  * 默认 false, 存在未完成订单时返回 16503 错误。
- * 返回 cashierUrl (官方收银台链接); 传 withPayLink=true 时
- * 额外调用 toPayOrderTrade 生成支付链接 (payType 缺省取首个 H5 渠道)。
+ * 下单后默认继续跟随收银台流程调用 toPayOrderTrade 生成支付信息
+ * (payLink, 含建行聚合支付扫码内容 urlCode); withPayLink=false 可跳过。
+ * 实测电费收银台仅 "建行聚合支付" (payType=41) 一种支付方式可选,
+ * 且仅支持 NATIVE 扫码, 故 payType/tradeType 缺省为 41/NATIVE。
  */
 paym.post("/electricity/order", async (c) => {
   const body = await jsonBody<{
@@ -320,17 +321,14 @@ paym.post("/electricity/order", async (c) => {
       ...order,
       cashierUrl: buildCashierUrl(body.projectId, order.orderId),
     };
-    if (body.withPayLink) {
+    if (body.withPayLink ?? true) {
       if (!order.orderNo) {
         throw new Error("订单缺少 orderNo, 无法生成支付链接");
       }
-      const payType =
-        body.payType ??
-        (await getTradeChannels(jar, s, body.projectId))[0]?.code;
-      if (!payType) throw new Error("该项目无可用支付渠道");
+      // payType/tradeType 缺省由 createPayTrade 取 41/NATIVE (建行聚合支付扫码)
       response.payLink = await createPayTrade(jar, s, {
         orderNo: order.orderNo,
-        payType,
+        payType: body.payType,
         tradeType: body.tradeType,
       });
     }
@@ -376,14 +374,13 @@ paym.get("/orders/:orderId", async (c) => {
 });
 
 /**
- * 去支付 (仅未支付订单): 生成支付链接, 用户确认前不扣款。
- * body: { projectId?, payType?, tradeType? }; payType 缺省时
- * 用 projectId 查询首个 H5 渠道 (订单详情中 projectId 可能为空, 需调用方提供)。
+ * 去支付 (仅未支付订单): 生成支付信息, 用户确认前不扣款。
+ * body: { payType?, tradeType? }; 缺省为 41/NATIVE (建行聚合支付扫码,
+ * 实测电费收银台唯一可用支付方式), 返回含 urlCode (扫码内容)。
  */
 paym.post("/orders/:orderId/pay", async (c) => {
   const orderId = c.req.param("orderId");
   const body = await jsonBody<{
-    projectId?: string;
     payType?: string;
     tradeType?: string;
   }>(c);
@@ -392,18 +389,9 @@ paym.post("/orders/:orderId/pay", async (c) => {
     if (!isOrderUnpaid(order)) {
       throw new Error(`订单当前状态为 ${order.status ?? "未知"}, 不可支付`);
     }
-    let payType = body?.payType;
-    if (!payType) {
-      const projectId = body?.projectId ?? order.projectId;
-      if (!projectId) {
-        throw new Error("缺省 payType 时需提供 projectId 以查询支付渠道");
-      }
-      payType = (await getTradeChannels(jar, s, projectId))[0]?.code;
-      if (!payType) throw new Error("该项目无可用支付渠道");
-    }
     return createPayTrade(jar, s, {
       orderNo: order.orderNo,
-      payType,
+      payType: body?.payType,
       tradeType: body?.tradeType,
     });
   });

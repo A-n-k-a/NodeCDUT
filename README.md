@@ -60,7 +60,7 @@
 ```
 route (可选, 智能选通道) → projects (选项目) → areas (选区域) → buildings (选楼栋)
     → floors (选楼层, 仅新开普 E034) → rooms (选房间) → balance (查余额)
-    → order (下单) → cashierUrl 交予用户支付, 或 orders/{orderId}/pay 生成支付链接
+    → order (下单, 默认继续生成支付信息 payLink, 含建行聚合支付扫码内容 urlCode)
 ```
 
 > 快捷方式: `route` 携带 `building` + `roomNo` 可一步解析到房间 (含 E034 自动推断 levelId),
@@ -311,18 +311,18 @@ E034 响应示例 (无 `total`, 多 `canbuy` 是否可充值标识):
 | `areaName` / `buildName` / `levelName` / `roomName` | 否 | 名称快照, 建议照抄选择结果, 缺省为空串 |
 | `buyerId` | 否 | 购买人学号, 缺省取会话中的 studentId |
 | `closePrevious` | 否 | `true` = 创建前自动关闭本项目下的未完成订单; **默认 `false`**, 此时若存在未完成订单返回 `[16503] 此项目下存在未完成的订单...` 错误 |
-| `withPayLink` | 否 | `true` 时额外返回 `payLink` 支付链接 (默认 `false`) |
-| `payType` | 否 | 支付渠道代码, 缺省取项目首个 H5 渠道 (实测当前仅 `08` = 建行网银支付); 配合 `withPayLink` 使用 |
-| `tradeType` | 否 | `WAP` (默认, 手机网页) / `NATIVE` (扫码) / `JSAPI` (微信内) / `MINI` (小程序) |
+| `withPayLink` | 否 | **默认 `true`**: 下单后自动继续调用 `toPayOrderTrade` 生成支付信息 (`payLink`); 传 `false` 跳过 |
+| `payType` | 否 | 支付渠道代码, **默认 `41`** (建行聚合支付, 实测电费收银台唯一可用支付方式) |
+| `tradeType` | 否 | **默认 `NATIVE`** (扫码, 返回 `urlCode`); 建行聚合支付仅支持 NATIVE, 传 `WAP` 会报 "支付类型不存在" |
 
-> ⚠️ 会**真实创建待支付订单** (约 15 分钟未支付自动关闭); `payLink` 仅为支付跳转链接/表单, 用户在渠道确认前不发生扣款。
+> ⚠️ 会**真实创建待支付订单** (约 15 分钟未支付自动关闭); `payLink` 仅为支付信息 (二维码内容/跳转链接), 用户在渠道确认前不发生扣款。
 
 ```bash
 curl -X POST "$BASE/paym/electricity/order" \
   -H "X-Auth-Cookies: $SESSION" -H "Content-Type: application/json" \
   -d '{"projectId":"2595a1f7c8cf17410c85f9e05f9cc7c3","areaId":"2","areaName":"芙蓉",
        "buildId":"1","buildName":"芙蓉1照明","roomId":"1","roomName":"1-101",
-       "amount":0.01,"closePrevious":true,"withPayLink":true}'
+       "amount":0.01,"closePrevious":true}'
 
 # E034 (新开普) 示例: 需带 levelId/levelName, roomId 为复合串
 curl -X POST "$BASE/paym/electricity/order" \
@@ -334,18 +334,27 @@ curl -X POST "$BASE/paym/electricity/order" \
 
 ```json
 {
-  "orderId": "f8301f2e2633e32f389749b2765ae4a4",
-  "orderNo": "26090122524334924915",
+  "orderId": "de2e34ade010f0b11f2c9934e072fe91",
+  "orderNo": "26090300021465165606",
   "status": "PENDING_PAYMENT",
-  "closeTime": "2026-09-01 23:07:43",
-  "closedOrderIds": ["4d39bf1abda0c833787a0769e9b0498d"],
-  "cashierUrl": "https://paym.cdut.edu.cn/mobile/#/person?projectId=2595a1f7c8cf17410c85f9e05f9cc7c3&orderId=f8301f2e2633e32f389749b2765ae4a4",
-  "payLink": { "payType": "08", "tradeType": "WAP", "sbHtml": "<script>...</form>" }
+  "closeTime": "2026-09-03 00:17:14",
+  "closedOrderIds": ["ac972d4ae70b4a6df1fad3d3cd8159b2"],
+  "cashierUrl": "https://paym.cdut.edu.cn/mobile/#/person?projectId=2595a1f7c8cf17410c85f9e05f9cc7c3&orderId=de2e34ade010f0b11f2c9934e072fe91",
+  "payLink": {
+    "orderNo": "26090300021465165606",
+    "amount": 1,
+    "payType": "41",
+    "tradeType": "NATIVE",
+    "urlCode": "https://ibsbjstar.ccb.com.cn/CCBIS/QR?QRCODE=CCB9980109685620343432814"
+  }
 }
 ```
 
 - `cashierUrl`: 官方收银台页面 (需在已登录的浏览器环境打开)
-- `payLink`: 直连渠道支付信息, 按渠道不同返回 `mwebUrl` (微信 WAP) / `urlCode` (扫码) / `webUrl` (网银) / `sbHtml` (自动提交表单)
+- `payLink`: `toPayOrderTrade` 上游响应中有值的字段原样透传 (为 null 的字段省略)。
+  其中 `urlCode` 为建行聚合支付二维码内容 (官方前端用 JS 据此渲染二维码, 本项目不做处理,
+  调用方可自行生成二维码展示); 其余渠道可能返回 `mwebUrl` / `webUrl` / `sbHtml` 等
+- `payLink.amount` 单位为分 (上游原始值)
 - `closedOrderIds`: 仅 `closePrevious: true` 且确实关闭了订单时出现
 
 ## 订单接口详解
@@ -415,27 +424,27 @@ curl "$BASE/paym/orders/f8301f2e2633e32f389749b2765ae4a4" \
 ```
 
 - `unpaid: true` (即 `status === "PENDING_PAYMENT"`) 时附带 `actions: ["pay", "close"]`, 否则为 `[]`
-- 注意: 详情接口上游不一定返回 `projectId`, 如需去支付请自行保存下单时的 projectId
 
 ### POST /paym/orders/{orderId}/pay — 去支付
 
-仅未支付订单可用; 生成支付链接, **用户在渠道确认前不发生扣款**。
+仅未支付订单可用; 生成支付信息, **用户在渠道确认前不发生扣款**。
 
 | 参数 | 必填 | 允许取值 / 说明 |
 |---|---|---|
-| `projectId` | 视情况 | 缺省 `payType` 时必填 (用于查询项目可用渠道) |
-| `payType` | 否 | 支付渠道代码 (如 `08` = 建行网银), 缺省取该项目首个 H5 渠道 |
-| `tradeType` | 否 | `WAP` (默认) / `NATIVE` / `JSAPI` / `MINI` |
+| `payType` | 否 | 支付渠道代码, **默认 `41`** (建行聚合支付, 实测电费收银台唯一可用) |
+| `tradeType` | 否 | **默认 `NATIVE`** (扫码, 返回 `urlCode`); 建行聚合支付仅支持 NATIVE |
 
 ```bash
 curl -X POST "$BASE/paym/orders/f8301f2e2633e32f389749b2765ae4a4/pay" \
-  -H "X-Auth-Cookies: $SESSION" -H "Content-Type: application/json" \
-  -d '{"projectId":"2595a1f7c8cf17410c85f9e05f9cc7c3"}'
+  -H "X-Auth-Cookies: $SESSION" -H "Content-Type: application/json" -d '{}'
 ```
 
 ```json
-{ "payType": "08", "tradeType": "WAP", "sbHtml": "<script>...自动提交建行网银表单...</form>" }
+{ "payType": "41", "tradeType": "NATIVE", "orderNo": "26090122524334924915",
+  "urlCode": "https://ibsbjstar.ccb.com.cn/CCBIS/QR?QRCODE=CCB99801..." }
 ```
+
+响应为上游有值字段的原样透传; `urlCode` 为建行聚合支付二维码内容, 调用方可自行渲染为二维码。
 
 订单非待支付状态时返回错误: `订单当前状态为 CLOSED, 不可支付`。
 

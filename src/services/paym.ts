@@ -244,61 +244,53 @@ export async function getTradeChannels(
 }
 
 export interface PayTradeResult {
-  payType?: string;
-  tradeType?: string;
-  /** 微信 WAP 支付跳转链接 */
-  mwebUrl?: string;
-  /** 扫码支付二维码链接 (NATIVE) */
-  urlCode?: string;
-  /** 网银跳转链接 */
-  webUrl?: string;
-  /** 自动提交的支付表单 HTML (如建行网银) */
-  sbHtml?: string;
+  /**
+   * 上游返回的全部有值字段原样透传 (null/缺失字段省略),
+   * 如 orderNo / amount(分) / payType / tradeType / urlCode (建行聚合支付
+   * 扫码内容, 前端据此生成二维码) / mwebUrl / webUrl / sbHtml 等
+   */
+  [key: string]: unknown;
   raw: unknown;
 }
 
 /**
  * 发起支付交易, 获取支付链接 (对应收银台 "立即支付")。
- * 仅生成支付链接/表单, 用户在对应渠道确认前不发生真实扣款。
- * tradeType: WAP (手机网页, 默认) / NATIVE (扫码) / JSAPI (微信内) / MINI (小程序)。
+ * 仅生成支付链接/二维码内容, 用户在对应渠道确认前不发生真实扣款。
+ *
+ * 抓包结论 (2026-09): 电费收银台实际仅 "建行聚合支付" (payType=41) 一种
+ * 支付方式可选, 且仅支持 NATIVE (扫码, 返回 urlCode); WAP 会报 "支付类型不存在"。
+ * queryTradeChannel 返回的 08/02 渠道与前端实际流程不符, 故 payType 缺省固定 "41"。
+ * tradeType: NATIVE (扫码, 默认) / WAP / JSAPI / MINI。
  */
 export async function createPayTrade(
   jar: CookieJar,
   session: PaymSession,
   params: {
     orderNo: string;
-    payType: string;
+    /** 支付渠道代码, 缺省 "41" (建行聚合支付, 实测唯一可用) */
+    payType?: string;
     tradeType?: string;
     returnUrl?: string;
     ip?: string;
   }
 ): Promise<PayTradeResult> {
-  const data = await postJson<{
-    payType?: string;
-    tradeType?: string;
-    mwebUrl?: string;
-    urlCode?: string;
-    webUrl?: string;
-    sbHtml?: string;
-  }>(jar, session, "/api/pay/web/third/toPayOrderTrade/", {
-    payType: params.payType,
-    orderNo: params.orderNo,
-    ip: params.ip ?? "127.0.0.1",
-    schoolCode: "datalook",
-    dataSource: "PAY",
-    returnUrl: params.returnUrl ?? "",
-    tradeType: params.tradeType ?? "WAP",
-  });
+  const data = await postJson<Record<string, unknown>>(
+    jar,
+    session,
+    "/api/pay/web/third/toPayOrderTrade/",
+    {
+      payType: params.payType ?? "41",
+      tradeType: params.tradeType ?? "NATIVE",
+      orderNo: params.orderNo,
+      ip: params.ip ?? "127.0.0.1",
+      schoolCode: "datalook",
+      dataSource: "PAY",
+      returnUrl: params.returnUrl ?? "",
+    }
+  );
   if (!data) throw new Error("发起支付交易失败: 返回数据为空");
-  return {
-    payType: data.payType,
-    tradeType: data.tradeType,
-    mwebUrl: data.mwebUrl ?? undefined,
-    urlCode: data.urlCode ?? undefined,
-    webUrl: data.webUrl ?? undefined,
-    sbHtml: data.sbHtml ?? undefined,
-    raw: data,
-  };
+  // 透传全部有值的上游字段 (urlCode 等), null/缺失字段省略
+  return { ...dropNulls(data), raw: data };
 }
 
 // ---------- 订单查询与关闭 ----------
