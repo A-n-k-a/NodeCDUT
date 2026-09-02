@@ -342,7 +342,7 @@ curl -X POST "$BASE/paym/electricity/order" \
   "cashierUrl": "https://paym.cdut.edu.cn/mobile/#/person?projectId=2595a1f7c8cf17410c85f9e05f9cc7c3&orderId=de2e34ade010f0b11f2c9934e072fe91",
   "payLink": {
     "orderNo": "26090300021465165606",
-    "amount": 1,
+    "amount": 0.01,
     "payType": "41",
     "tradeType": "NATIVE",
     "urlCode": "https://ibsbjstar.ccb.com.cn/CCBIS/QR?QRCODE=CCB9980109685620343432814"
@@ -354,7 +354,7 @@ curl -X POST "$BASE/paym/electricity/order" \
 - `payLink`: `toPayOrderTrade` 上游响应中有值的字段原样透传 (为 null 的字段省略)。
   其中 `urlCode` 为建行聚合支付二维码内容 (官方前端用 JS 据此渲染二维码, 本项目不做处理,
   调用方可自行生成二维码展示); 其余渠道可能返回 `mwebUrl` / `webUrl` / `sbHtml` 等
-- `payLink.amount` 单位为分 (上游原始值)
+- `payLink.amount` 单位为元 (已从上游的分换算, 与订单接口口径一致)
 - `closedOrderIds`: 仅 `closePrevious: true` 且确实关闭了订单时出现
 
 ## 订单接口详解

@@ -246,8 +246,8 @@ export async function getTradeChannels(
 export interface PayTradeResult {
   /**
    * 上游返回的全部有值字段原样透传 (null/缺失字段省略),
-   * 如 orderNo / amount(分) / payType / tradeType / urlCode (建行聚合支付
-   * 扫码内容, 前端据此生成二维码) / mwebUrl / webUrl / sbHtml 等
+   * 如 orderNo / amount(已从分换算为元) / payType / tradeType /
+   * urlCode (建行聚合支付扫码内容, 前端据此生成二维码) / mwebUrl / webUrl / sbHtml 等
    */
   [key: string]: unknown;
   raw: unknown;
@@ -289,8 +289,14 @@ export async function createPayTrade(
     }
   );
   if (!data) throw new Error("发起支付交易失败: 返回数据为空");
-  // 透传全部有值的上游字段 (urlCode 等), null/缺失字段省略
-  return { ...dropNulls(data), raw: data };
+  // 透传全部有值的上游字段 (urlCode 等), null/缺失字段省略;
+  // amount 从分换算为元, 与订单接口口径一致
+  const { amount, ...rest } = dropNulls(data);
+  return {
+    ...rest,
+    ...(typeof amount === "number" ? { amount: amount / 100 } : {}),
+    raw: data,
+  };
 }
 
 // ---------- 订单查询与关闭 ----------
