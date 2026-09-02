@@ -504,3 +504,279 @@ export function routeElectricityChannel(
   }
   return { park, type, buildingNo, factoryCode };
 }
+
+// ---------- 一站式房间解析 (园区+楼栋+房间号 → balance/order 全链路 id) ----------
+
+export interface ElecRoomResolveParams {
+  park: ElecPark;
+  type: ElecUseType;
+  /** 楼栋 (栋号): 数字或含数字的字符串, 如 1 / "1栋" / "01" */
+  building: string | number;
+  /** 房间号, 如 "512"; E034 依此自动推断楼层 (去掉末两位) */
+  roomNo: string;
+}
+
+/** 解析结果: 字段与 balance / order 接口入参一一对应, 可直接回传 */
+export interface ElecRoomResolved extends ElecRouteResult {
+  projectId: string;
+  projectName: string;
+  hasFloors: boolean;
+  areaId: string;
+  areaName: string;
+  buildId: string;
+  buildName: string;
+  /** 仅 E034, 由 roomNo 自动推断 */
+  levelId?: string;
+  levelName?: string;
+  roomId: string;
+  roomName: string;
+}
+
+/** 解析栋号: 接受 1 / "1" / "1栋" / "01" 等写法 */
+function parseBuildingNo(input: string | number): number {
+  const m = String(input).match(/\d+/);
+  if (!m) throw new Error(`无法解析栋号: ${String(input)}`);
+  return parseInt(m[0], 10);
+}
+
+/** 从房间号推断楼层数: 去掉末两位即为楼层 (512→5, 1205→12) */
+export function inferFloorFromRoomNo(roomNo: string): number {
+  const digits = roomNo.trim();
+  if (!/^\d{3,}$/.test(digits)) {
+    throw new Error(
+      `无法从房间号 "${roomNo}" 推断楼层 (须为不少于 3 位数字, 末两位为房号)`
+    );
+  }
+  return parseInt(digits.slice(0, -2), 10);
+}
+
+/** 名称中的数字段是否包含目标编号 ("银杏园01" 含 1, "10层" 含 10) */
+function nameHasNumber(name: string, n: number): boolean {
+  return name
+    .split(/\D+/)
+    .some((d) => d !== "" && parseInt(d, 10) === n);
+}
+
+/**
+ * 在楼栋列表中匹配目标楼栋 (可能多个, 如 E016 银杏1栋分 银杏1-1/1-2 两单元);
+ * strict 时要求名称含园区核心名 (跨园区搜索防误配, 如 E034 主分区下含全部园区楼栋),
+ * 非 strict 时若能按园区名收敛则收敛 (如在银杏区域中排除 榕树1)。
+ */
+function matchBuildings(
+  buildings: ElecOption[],
+  buildingNo: number,
+  type: ElecUseType,
+  parkCore: string,
+  strict: boolean
+): ElecOption[] {
+  const byPark = buildings.filter((b) => b.name.includes(parkCore));
+  let candidates = strict ? byPark : byPark.length ? byPark : buildings;
+  // E016 同栋分 照明/空调 两个通道楼栋 (如 "芙蓉1照明"/"芙蓉1空调")
+  const typed = candidates.filter((b) => b.name.includes(type));
+  if (typed.length) candidates = typed;
+  return candidates.filter((b) => nameHasNumber(b.name, buildingNo));
+}
+
+/**
+ * 在房间列表中按房间号匹配, 策略依次: 精确 → 尾段 ("1-101"/"1-101空调" 尾段 101,
+ * "3-A101空调" 尾段 A101) → 数字压平 ("1-01"→101, "3单元101"≈"3-101")
+ * → 栋号前缀 (E017 "2101"=2号楼+101, 香樟 "1A101"=1栋+A101)。唯一命中才返回。
+ */
+function matchRoom(
+  rooms: ElecOption[],
+  roomNo: string,
+  buildingNo?: number
+): ElecOption | undefined {
+  const rn = roomNo.trim();
+  const upper = (s: string) => s.trim().toUpperCase();
+  const exact = rooms.find((r) => upper(r.name) === upper(rn));
+  if (exact) return exact;
+  const digits = (s: string) => s.replace(/\D/g, "");
+  const rnDigits = digits(rn) ? String(parseInt(digits(rn), 10)) : null;
+  const byTail = rooms.filter((r) => {
+    const segs = upper(r.name).split(/[^0-9A-Z]+/).filter(Boolean);
+    const tail = segs[segs.length - 1] ?? "";
+    return (
+      tail === upper(rn) ||
+      (rnDigits !== null && /^\d+$/.test(tail) && String(parseInt(tail, 10)) === rnDigits)
+    );
+  });
+  if (byTail.length === 1) return byTail[0];
+  const alnum = (s: string) => s.replace(/[^0-9A-Za-z]/g, "").toUpperCase();
+  if (buildingNo !== undefined) {
+    // 栋号前缀 (保留字母): 香樟 "1A101"=1栋+A101, E017 "2101"=2号楼+101
+    const rnAlnum = alnum(rn);
+    const prefixedAlnum = rooms.filter(
+      (r) => alnum(r.name) === `${buildingNo}${rnAlnum}`.toUpperCase()
+    );
+    if (prefixedAlnum.length === 1) return prefixedAlnum[0];
+  }
+  if (rnDigits !== null) {
+    const squashed = rooms.filter(
+      (r) =>
+        /^\d+$/.test(digits(r.name)) &&
+        String(parseInt(digits(r.name), 10)) === rnDigits
+    );
+    if (squashed.length === 1) return squashed[0];
+    if (buildingNo !== undefined) {
+      const prefixed = rooms.filter(
+        (r) =>
+          /^\d+$/.test(digits(r.name)) &&
+          String(parseInt(digits(r.name), 10)) === `${buildingNo}${rnDigits}`
+      );
+      if (prefixed.length === 1) return prefixed[0];
+    }
+  }
+  return undefined;
+}
+
+/**
+ * 一站式解析: 由 园区+用电类型+楼栋+房间号 完成 通道路由→项目→区域→楼栋
+ * →楼层(仅 E034, 自动推断)→房间 全链路, 返回可直接用于 balance/order 的字段。
+ */
+export async function resolveElectricityRoom(
+  jar: CookieJar,
+  session: PaymSession,
+  params: ElecRoomResolveParams
+): Promise<ElecRoomResolved> {
+  const buildingNo = parseBuildingNo(params.building);
+  const routed = routeElectricityChannel(params.park, params.type, buildingNo);
+  const projects = await listElectricityProjects(jar, session);
+  const project = projects.find((p) => p.factoryCode === routed.factoryCode);
+  if (!project) {
+    throw new Error(`项目列表中未找到 ${routed.factoryCode} 电费项目`);
+  }
+  const parkCore = params.park.replace(/园$/, "");
+  const areas = await getElectricityAreas(jar, session, project.id);
+  // 优先名称含园区名的区域 (E016 芙蓉/香樟/银杏/松林, E017 珙桐园);
+  // 其余区域按楼栋名严格匹配园区 (E034 主分区, 或 E016 中无同名区域的榕树园)
+  let area: ElecOption | undefined;
+  let candidates: ElecOption[] = [];
+  for (const a of areas.filter((x) => x.name.includes(parkCore))) {
+    const m = matchBuildings(
+      await getElectricityBuildings(jar, session, project.id, a.id),
+      buildingNo,
+      params.type,
+      parkCore,
+      false
+    );
+    if (m.length) {
+      area = a;
+      candidates = m;
+      break;
+    }
+  }
+  if (!area) {
+    for (const a of areas.filter((x) => !x.name.includes(parkCore))) {
+      const m = matchBuildings(
+        await getElectricityBuildings(jar, session, project.id, a.id),
+        buildingNo,
+        params.type,
+        parkCore,
+        true
+      );
+      if (m.length) {
+        area = a;
+        candidates = m;
+        break;
+      }
+    }
+  }
+  if (!area || candidates.length === 0) {
+    throw new Error(
+      `未找到 ${params.park}${buildingNo}栋 (${params.type}) 对应的楼栋`
+    );
+  }
+
+  // E034: 房间号去掉末两位即为楼层数, 据此在楼层列表中解析 levelId
+  const floorNo = project.hasFloors
+    ? inferFloorFromRoomNo(params.roomNo)
+    : undefined;
+  /** 在候选楼栋中解析楼层+房间; pedantic 时抛出具体原因, 否则静默返回 undefined (用于消歧) */
+  const tryBuilding = async (b: ElecOption, pedantic: boolean) => {
+    let level: ElecOption | undefined;
+    if (project.hasFloors) {
+      const floors = await getElectricityFloors(
+        jar,
+        session,
+        project.id,
+        area!.id,
+        b.id
+      );
+      const byDigits = floors.filter((f) => nameHasNumber(f.name, floorNo!));
+      level =
+        floors.find((f) => f.name === `${floorNo}层`) ??
+        (byDigits.length === 1 ? byDigits[0] : undefined);
+      if (!level) {
+        if (pedantic) {
+          throw new Error(
+            `${b.name} 中未找到 ${floorNo} 层 (可用楼层: ${
+              floors.map((f) => f.name).join("/") || "无"
+            })`
+          );
+        }
+        return undefined;
+      }
+    }
+    const rooms = await getElectricityRooms(
+      jar,
+      session,
+      project.id,
+      area!.id,
+      b.id,
+      level?.id
+    );
+    const room = matchRoom(rooms, params.roomNo, buildingNo);
+    if (!room) {
+      if (pedantic) {
+        throw new Error(
+          `${b.name} 中未找到房间 ${params.roomNo} (该楼栋共 ${rooms.length} 间; ` +
+            `若房间带单元/分区前缀请完整提供, 如 "3单元101" 或 "1A101")`
+        );
+      }
+      return undefined;
+    }
+    return { building: b, level, room };
+  };
+
+  // 候选楼栋不唯一时 (如 E016 银杏1栋分 银杏1-1/1-2 两单元) 按房间号消歧
+  let hit: { building: ElecOption; level?: ElecOption; room: ElecOption } | undefined;
+  if (candidates.length === 1) {
+    hit = await tryBuilding(candidates[0], true);
+  } else {
+    const hits = [];
+    for (const b of candidates) {
+      const h = await tryBuilding(b, false);
+      if (h) hits.push(h);
+    }
+    if (hits.length === 0) {
+      throw new Error(
+        `未找到 ${params.park}${buildingNo}栋 (${params.type}) 的房间 ${params.roomNo} ` +
+          `(候选楼栋: ${candidates.map((b) => b.name).join("/")})`
+      );
+    }
+    if (hits.length > 1) {
+      throw new Error(
+        `房间号 ${params.roomNo} 匹配到多栋楼 (${hits
+          .map((h) => h.building.name)
+          .join("/")}), 请改用 buildings→rooms 逐级查询指定楼栋`
+      );
+    }
+    hit = hits[0];
+  }
+  const { building, level, room } = hit!;
+  return {
+    ...routed,
+    projectId: project.id,
+    projectName: project.name,
+    hasFloors: project.hasFloors,
+    areaId: area.id,
+    areaName: area.name,
+    buildId: building.id,
+    buildName: building.name,
+    levelId: level?.id,
+    levelName: level?.name,
+    roomId: room.id,
+    roomName: room.name,
+  };
+}

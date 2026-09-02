@@ -20,6 +20,7 @@ import {
   getElectricityFloors,
   getElectricityRooms,
   listElectricityProjects,
+  resolveElectricityRoom,
   routeElectricityChannel,
   ELEC_PARKS,
   type ElecPark,
@@ -196,12 +197,21 @@ paym.post("/electricity/balance", async (c) => {
 /**
  * 充值通道路由 (智能选择): 按校方规则根据 园区/用电类型(/栋号)
  * 推荐充值通道, 返回 projectId 供后续 areas/buildings/rooms/balance/order 使用。
+ *
+ * 一站式模式: 额外提供 building (栋号) 与 roomNo (房间号) 时, 自动完成
+ * 区域→楼栋→楼层(仅 E034, 由房间号去掉末两位推断 levelId)→房间 全链路解析,
+ * 返回可直接用于 balance / order 的全套字段。
  */
 paym.post("/electricity/route", async (c) => {
   const body = await jsonBody<{
     park: ElecPark;
     type: ElecUseType;
     buildingNo?: number;
+    /** 栋号 (亦可写作 area): 1 / "1栋" / "01" 均可 */
+    building?: string | number;
+    area?: string | number;
+    /** 房间号, 如 "512"; E034 依此自动推断 levelId */
+    roomNo?: string;
   }>(c);
   if (!body?.park || !body?.type) {
     return c.json(
@@ -217,6 +227,28 @@ paym.post("/electricity/route", async (c) => {
   if (body.type !== "照明" && body.type !== "空调") {
     return c.json({ error: "type 须为 照明 或 空调" }, 400);
   }
+
+  // 一站式模式: 提供 building (或 area) + roomNo 时解析到房间级
+  const buildingInput = body.building ?? body.area;
+  if (buildingInput !== undefined || body.roomNo !== undefined) {
+    if (buildingInput === undefined || !body.roomNo) {
+      return c.json(
+        { error: "一站式解析需同时提供 building (栋号) 和 roomNo (房间号)" },
+        400
+      );
+    }
+    const result = await withPaym(c, (jar, s) =>
+      resolveElectricityRoom(jar, s, {
+        park: body.park,
+        type: body.type,
+        building: buildingInput,
+        roomNo: String(body.roomNo),
+      })
+    );
+    if (result instanceof Response) return result;
+    return c.json(result);
+  }
+
   let routed;
   try {
     routed = routeElectricityChannel(body.park, body.type, body.buildingNo);

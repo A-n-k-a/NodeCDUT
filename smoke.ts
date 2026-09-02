@@ -9,6 +9,7 @@ import { CookieJar } from "./src/lib/http.js";
 import {
   routeElectricityChannel,
   buildCashierUrl,
+  inferFloorFromRoomNo,
 } from "./src/services/elec.js";
 
 let failures = 0;
@@ -130,5 +131,20 @@ check(
   buildCashierUrl("PROJ", "ORDER") ===
     "https://paym.cdut.edu.cn/mobile/#/person?projectId=PROJ&orderId=ORDER"
 );
+
+// 7. E034 楼层推断 (房间号去掉末两位)
+check("elec-infer-floor-512", inferFloorFromRoomNo("512") === 5);
+check("elec-infer-floor-1205", inferFloorFromRoomNo("1205") === 12);
+check("elec-infer-floor-101", inferFloorFromRoomNo("101") === 1);
+check("elec-infer-floor-带空格", inferFloorFromRoomNo(" 512 ") === 5);
+for (const bad of ["12", "5", "abc", ""]) {
+  let threw = false;
+  try {
+    inferFloorFromRoomNo(bad);
+  } catch {
+    threw = true;
+  }
+  check(`elec-infer-floor-非法输入"${bad}"报错`, threw);
+}
 
 process.exit(failures ? 1 : 0);
