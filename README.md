@@ -29,6 +29,13 @@
 
 支付: `GET /paym/userinfo` · `GET /paym/projects`
 
+`GET /paym/userinfo` 响应示例 (`idserial` 重命名为 `studentId`; 其余上游字段原样透传, 为 null 的字段省略):
+
+```json
+{ "id": "5d7e17e5561f402589b39dcfc6c23683", "studentId": "202318020101", "name": "张三",
+  "sex": "MALE", "userType": "IN_SCHOOL", "identityType": "02" }
+```
+
 电费: `GET /paym/electricity/projects` · `POST .../route` · `.../areas` · `.../buildings` · `.../floors` · `.../rooms` · `.../balance` · `.../order`
 
 订单: `GET /paym/orders` · `GET /paym/orders/{orderId}` · `POST /paym/orders/{orderId}/pay` · `POST /paym/orders/{orderId}/close`
@@ -67,13 +74,13 @@ route (可选, 智能选通道) → projects (选项目) → areas (选区域) �
 | 新开普电费 | `7a99ede5475b55a03adb936454463994` | E034 | **有楼层级**, rooms/balance 必须带 levelId; 房间 id 为复合串 (如 `99-9--101-101`) |
 | 科技园 | `71b85ee43146666e2b832a714b57edc1` | E018 | 区域固定 1 个, 无楼层 |
 
-响应示例:
+响应示例 (`projectName` 重命名为 `name`; 其余上游字段如 `imgUrl`/`status`/`payLimit` 等原样透传, 为 null 的字段省略):
 
 ```json
 {
   "count": 4,
   "projects": [
-    { "id": "2595a1f7c8cf17410c85f9e05f9cc7c3", "name": "爱立德电费", "factoryCode": "E016", "hasFloors": false }
+    { "id": "2595a1f7c8cf17410c85f9e05f9cc7c3", "name": "爱立德电费", "factoryCode": "E016", "hasFloors": false, "...": "..." }
   ]
 }
 ```

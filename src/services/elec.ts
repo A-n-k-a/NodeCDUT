@@ -2,6 +2,7 @@ import { USER_AGENT } from "./cas.js";
 import { CookieJar, fetchWithJar } from "../lib/http.js";
 import {
   closeOrder,
+  dropNulls,
   listPendingOrders,
   type PaymSession,
 } from "./paym.js";
@@ -40,9 +41,13 @@ const KJY_AREAS = [{ id: "1", name: "芙蓉" }];
 
 export interface ElecProject {
   id: string;
+  /** 项目名称 (上游 projectName) */
   name: string;
   factoryCode: ElecFactory;
+  /** 是否有楼层级 (由 factoryCode 派生, 仅 E034 为 true) */
   hasFloors: boolean;
+  /** 其余上游字段原样透传 (null/缺失字段省略), 如 imgUrl/status/payLimit 等 */
+  [key: string]: unknown;
 }
 
 /** 列出全部电费项目 (proModelUrl === "electric") */
@@ -56,19 +61,30 @@ export async function listElectricityProjects(
     { headers: { "User-Agent": USER_AGENT, "X-Token": session.token } }
   );
   const body = (await res.json()) as PaymResp<
-    { id: string; projectName: string; proModelUrl?: string | null; factoryCode?: string | null }[]
+    (Record<string, unknown> & {
+      id: string;
+      projectName: string;
+      proModelUrl?: string | null;
+      factoryCode?: string | null;
+    })[]
   >;
   if (body.messageCode !== "0" || !Array.isArray(body.data)) {
     throw new Error(`获取项目列表失败: [${body.messageCode}] ${body.message}`);
   }
+  // 透传全部上游字段: 省略 null/缺失项, projectName 重命名为 name
   return body.data
     .filter((p) => p.proModelUrl === "electric")
-    .map((p) => ({
-      id: p.id,
-      name: p.projectName,
-      factoryCode: (p.factoryCode ?? "") as ElecFactory,
-      hasFloors: p.factoryCode === "E034",
-    }));
+    .map((p) => {
+      const { projectName, ...rest } = p;
+      const factoryCode = (p.factoryCode ?? "") as ElecFactory;
+      return {
+        ...dropNulls(rest),
+        id: p.id,
+        name: projectName,
+        factoryCode,
+        hasFloors: factoryCode === "E034",
+      };
+    });
 }
 
 export interface ElecOption {

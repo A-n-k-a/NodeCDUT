@@ -11,14 +11,23 @@ const CAS_SERVICE_URL = "http://paym.cdut.edu.cn/casLogin/";
 
 export interface UserInfo {
   id: string;
+  /** 学号/工号 (上游 idserial) */
   studentId: string;
   name: string;
   sex: string;
+  /**
+   * 其余上游字段原样透传 (null/缺失字段省略),
+   * 如 userType (IN_SCHOOL) / identityType / phone / email / headimgUrl 等
+   */
+  [key: string]: unknown;
 }
 
 export interface Project {
   id: string;
+  /** 项目名称 (上游 projectName) */
   name: string;
+  /** 其余上游字段原样透传 (null/缺失字段省略) */
+  [key: string]: unknown;
 }
 
 export interface PaymSession {
@@ -124,34 +133,42 @@ async function getJson<T>(
   return body.data;
 }
 
+/** 移除对象中值为 null/undefined 的键 (上游字段透传时使用) */
+export function dropNulls(obj: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(obj).filter(([, v]) => v !== null && v !== undefined)
+  );
+}
+
 export async function getUserInfo(
   jar: CookieJar,
   session: PaymSession
 ): Promise<UserInfo> {
-  return getJson<{
-    id: string;
-    idserial: string;
-    name: string;
-    sex: string;
-  }>(jar, session.token, `/api/pay/queryUserInfo/${session.token}`).then(
-    (d) => ({
-      id: d.id,
-      studentId: d.idserial,
-      name: d.name,
-      sex: d.sex,
-    })
-  );
+  const d = await getJson<
+    Record<string, unknown> & {
+      id: string;
+      idserial: string;
+      name: string;
+      sex: string;
+    }
+  >(jar, session.token, `/api/pay/queryUserInfo/${session.token}`);
+  // 透传全部上游字段: 省略 null/缺失项, idserial 重命名为 studentId
+  const { idserial, ...rest } = d;
+  return { ...dropNulls(rest), id: d.id, name: d.name, sex: d.sex, studentId: idserial };
 }
 
 export async function getAllProjects(
   jar: CookieJar,
   session: PaymSession
 ): Promise<Project[]> {
-  return getJson<{ id: string; projectName: string }[]>(
-    jar,
-    session.token,
-    "/api/pay/project/getAllProjectList"
-  ).then((list) => list.map((p) => ({ id: p.id, name: p.projectName })));
+  const list = await getJson<
+    (Record<string, unknown> & { id: string; projectName: string })[]
+  >(jar, session.token, "/api/pay/project/getAllProjectList");
+  // 透传全部上游字段: 省略 null/缺失项, projectName 重命名为 name
+  return list.map((p) => {
+    const { projectName, ...rest } = p;
+    return { ...dropNulls(rest), id: p.id, name: projectName };
+  });
 }
 
 // ---------- 支付渠道与支付交易 (通用, 非电费专属) ----------
@@ -188,9 +205,12 @@ async function postJson<T>(
 
 export interface TradeChannel {
   code: string;
+  /** 渠道名称 (上游 channelName) */
   name: string;
   interfaceType?: string;
   imageUrl?: string;
+  /** 其余上游字段原样透传 (null/缺失字段省略), 如 id/channelId/enterType 等 */
+  [key: string]: unknown;
 }
 
 /** 可用支付渠道 (enterType: H5 / wechat 等, 前端缺省 H5) */
@@ -206,17 +226,21 @@ export async function getTradeChannels(
     { headers: { "User-Agent": USER_AGENT, "X-Token": session.token } }
   );
   const body = (await res.json()) as PaymResp<
-    { code: string; channelName: string; interfaceType?: string; imageUrl?: string }[]
+    (Record<string, unknown> & {
+      code: string;
+      channelName: string;
+      interfaceType?: string;
+      imageUrl?: string;
+    })[]
   >;
   if (body.messageCode !== "0" || !Array.isArray(body.data)) {
     throw new Error(`获取支付渠道失败: [${body.messageCode}] ${body.message}`);
   }
-  return body.data.map((c) => ({
-    code: c.code,
-    name: c.channelName,
-    interfaceType: c.interfaceType,
-    imageUrl: c.imageUrl,
-  }));
+  // 透传全部上游字段: 省略 null/缺失项, channelName 重命名为 name
+  return body.data.map((c) => {
+    const { channelName, ...rest } = c;
+    return { ...dropNulls(rest), code: c.code, name: channelName };
+  });
 }
 
 export interface PayTradeResult {
