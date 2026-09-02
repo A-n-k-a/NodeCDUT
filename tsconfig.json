@@ -13,6 +13,6 @@
     "resolveJsonModule": true,
     "allowSyntheticDefaultImports": true
   },
-  "include": ["src/**/*.ts", "api/**/*.ts"],
+  "include": ["src/**/*.ts", "api/**/*.ts", "cloud-functions/**/*.ts"],
   "exclude": ["node_modules"]
 }

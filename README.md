@@ -367,6 +367,10 @@ vercel env add SESSION_SECRET   # 生产密钥
 vercel deploy
 ```
 
+### 腾讯云 EdgeOne Makers
+
+仓库已内置 `edgeone.json` 与 `cloud-functions/[[default]].ts` (Node.js Cloud Function, 全路径接管)。导入 Git 仓库时框架预设选 **Hono** 即可 (构建/输出配置由 `edgeone.json` 覆盖), 并在「环境变量」中配置 `SESSION_SECRET`。
+
 ## 电费链路说明 (抓包分析)
 
 上游 C# 端未完成的电费功能已通过抓包补齐: 楼栋/房间/余额均改为**动态接口查询** (`payEleCostController`), 取代了 C# 端静态的 `RoomIds` 映射表与未完成的 `ConvertDomInfoToQuery` 智能转换, 数据不再有过期风险。注意: 该控制器要求请求体 `Content-Type: application/json`, 否则后端返回误导性的 "系统正在维护中" (messageCode=2)。
