@@ -1,22 +1,16 @@
 import http2 from "node:http2";
 import { TextDecoder } from "node:util";
-import { Agent, setGlobalDispatcher } from "undici";
+
+// 注意: 不要在此引入 undici 等第三方包。
+// EdgeOne Makers 的构建器打包 undici 会破坏其内部模块一致性
+// (webidl.util.markAsUncloneable 报错), 导致函数冷启动崩溃。
+// 各 fetch 调用点均有独立的 AbortSignal 超时控制, 无需全局 dispatcher 调优。
 
 const IS_SERVERLESS =
   !!process.env.VERCEL ||
   !!process.env.AWS_LAMBDA_FUNCTION_NAME ||
   !!process.env.TENCENTCLOUD_RUNENV ||
   !!process.env.EFUNCTION;
-
-if (IS_SERVERLESS) {
-  setGlobalDispatcher(
-    new Agent({
-      connect: { timeout: 30_000 },
-      bodyTimeout: 45_000,
-      headersTimeout: 15_000,
-    })
-  );
-}
 
 const {
   HTTP2_HEADER_PATH,
