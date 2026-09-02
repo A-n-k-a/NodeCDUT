@@ -135,6 +135,19 @@ curl -X POST "$BASE/paym/electricity/buildings" \
 { "count": 18, "buildings": [ {"id":"1","name":"芙蓉1照明"}, {"id":"10","name":"芙蓉1空调"}, ... ] }
 ```
 
+E034 (新开普) 示例: 区域固定为主分区 `99`, 楼栋按园区命名 (实测共 22 栋, 含峨眉校区英才楼):
+
+```bash
+curl -X POST "$BASE/paym/electricity/buildings" \
+  -H "X-Auth-Cookies: $SESSION" -H "Content-Type: application/json" \
+  -d '{"projectId":"7a99ede5475b55a03adb936454463994","areaId":"99"}'
+```
+
+```json
+{ "count": 22, "buildings": [ {"id":"9","name":"银杏园01"}, {"id":"13","name":"珙桐园01"},
+  {"id":"1","name":"榕树园05"}, {"id":"20","name":"松林园01"}, {"id":"22","name":"峨眉校区英才楼"}, ... ] }
+```
+
 ### POST /paym/electricity/floors — 楼层列表 (仅 E034)
 
 | 参数 | 必填 | 说明 |
@@ -180,7 +193,13 @@ curl -X POST "$BASE/paym/electricity/rooms" \
 { "count": 108, "rooms": [ {"id":"1","name":"1-101"}, {"id":"10","name":"1-110"}, ... ] }
 ```
 
-E034 的房间 `id` 为复合串 (如 `99-9--101-101`), 后续 balance/order 直接回传即可。
+E034 的房间 `id` 为复合串 (如 `99-9--101-101`), `name` 仅为房间号, 后续 balance/order 直接回传 `id` 即可:
+
+```json
+{ "count": 75, "rooms": [ {"id":"99-9--101-101","name":"101"}, {"id":"99-9--101-102","name":"102"}, ... ] }
+```
+
+> 缺省 `levelId` 调用 E034 rooms 会报错: `新开普电费 (E034) 查询房间必须提供 levelId`。
 
 ### POST /paym/electricity/balance — 剩余电量查询
 
@@ -190,19 +209,32 @@ E034 的房间 `id` 为复合串 (如 `99-9--101-101`), 后续 balance/order 直
 | `areaId` | 是 | 区域 id |
 | `buildId` | 是 | 楼栋 id |
 | `roomId` | 是 | rooms 返回的 `id` |
-| `levelId` | E034 必填 | 楼层 id |
+| `levelId` | E034 建议携带 | 楼层 id (实测 E034 仅凭 roomId 复合串即可定位, 省略也可查询) |
 
 ```bash
+# E016 (爱立德) 示例
 curl -X POST "$BASE/paym/electricity/balance" \
   -H "X-Auth-Cookies: $SESSION" -H "Content-Type: application/json" \
   -d '{"projectId":"2595a1f7c8cf17410c85f9e05f9cc7c3","areaId":"2","buildId":"1","roomId":"1"}'
+
+# E034 (新开普) 示例: roomId 回传 rooms 返回的复合 id
+curl -X POST "$BASE/paym/electricity/balance" \
+  -H "X-Auth-Cookies: $SESSION" -H "Content-Type: application/json" \
+  -d '{"projectId":"7a99ede5475b55a03adb936454463994","areaId":"99","buildId":"9",
+       "levelId":"101","roomId":"99-9--101-101"}'
 ```
 
 ```json
-{ "remain": "36.93", "total": "1487.60", "unit": "度" }
+{ "remain": "36.93", "total": "1487.60" }
 ```
 
-> ⚠️ `remain` / `total` 单位为 **度 (kWh)**, 并非人民币元; 原始字符串返回 (可能为负数, 表示透支)。
+E034 响应示例 (无 `total`, 多 `canbuy` 是否可充值标识):
+
+```json
+{ "remain": "49.02", "canbuy": "1" }
+```
+
+> 数值单位为度 (kWh), 原始字符串返回, 可能为负数表示透支。
 
 ### POST /paym/electricity/order — 创建充值订单
 
@@ -229,6 +261,13 @@ curl -X POST "$BASE/paym/electricity/order" \
   -d '{"projectId":"2595a1f7c8cf17410c85f9e05f9cc7c3","areaId":"2","areaName":"芙蓉",
        "buildId":"1","buildName":"芙蓉1照明","roomId":"1","roomName":"1-101",
        "amount":0.01,"closePrevious":true,"withPayLink":true}'
+
+# E034 (新开普) 示例: 需带 levelId/levelName, roomId 为复合串
+curl -X POST "$BASE/paym/electricity/order" \
+  -H "X-Auth-Cookies: $SESSION" -H "Content-Type: application/json" \
+  -d '{"projectId":"7a99ede5475b55a03adb936454463994","areaId":"99","areaName":"主分区",
+       "buildId":"9","buildName":"银杏园01","levelId":"101","levelName":"1层",
+       "roomId":"99-9--101-101","roomName":"101","amount":0.01,"closePrevious":true}'
 ```
 
 ```json

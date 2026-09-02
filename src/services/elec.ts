@@ -79,10 +79,8 @@ export interface ElecOption {
 export interface ElecBalance {
   /** 剩余电量 (oddl, 单位: 度, 原始字符串; 可能为负) */
   remain: string;
-  /** 累计用电量 (suml, 单位: 度, 可能为 null) */
+  /** 累计用电量 (suml, 可能为 null; E034 不返回) */
   total?: string;
-  /** 余额单位: 度 (kWh), 非人民币元 */
-  unit: "度";
   canbuy?: string;
 }
 
@@ -318,7 +316,6 @@ export async function getElectricityBalance(
   return {
     remain: first.oddl,
     total: first.suml ?? undefined,
-    unit: "度",
     canbuy: first.canbuy ?? undefined,
   };
 }
