@@ -17,15 +17,29 @@
 
 ## 端点
 
-认证: `POST /auth/login` `{username, password}` · `POST /auth/sms/send` `{phone}` · `POST /auth/sms/login` `{phone, code}`
+> 下列 `请求:` 指请求体 (JSON), `响应:` 指响应体 (JSON); 标注 `?format=ics` 的端点加该查询参数后响应改为 ICS 日历文件。
+
+认证:
+- `POST /auth/login` — 请求: `{username, password}`; 响应: `{success, studentId, session}` (session 同见于 `X-Auth-Cookies` 响应头)
+- `POST /auth/sms/send` — 请求: `{phone}`; 响应: `{success}`
+- `POST /auth/sms/login` — 请求: `{phone, code}`; 响应: `{success, studentId, session}`
 
 教务 (均需 `X-Auth-Cookies`):
-- `GET /jw/schedule/meta` 学期/周次选项
-- `POST /jw/schedule` `{xqid?, week?}` 新版课表, `?format=ics` 导出日历
-- `GET /jw/schedule/legacy/meta` · `POST /jw/schedule/legacy` `{xqid, week, startDate}` 旧版课表
-- `GET /jw/exams/meta` · `POST /jw/exams` `{xnxqid}` 考试信息, `?format=ics` 导出
-- `POST /jw/students` `{name}` 学生查询
-- `GET /jw/elective/projects` 选课计划列表
+- `GET /jw/schedule/meta` — 响应: 学期/周次选项
+- `POST /jw/schedule` — 请求: `{xqid?, week?}` (缺省取当前学期当周); 响应: `{semester, week, weekStart, classCount, classes[]}`, 支持 `?format=ics`
+- `GET /jw/schedule/legacy/meta` — 响应: 旧版课表学期选项
+- `POST /jw/schedule/legacy` — 请求: `{xqid, week, startDate}` (startDate 为第一周周一); 响应同新版课表, 支持 `?format=ics`
+- `GET /jw/exams/meta` — 响应: 学期选项
+- `POST /jw/exams` — 请求: `{xnxqid}`; 响应: `{semester, examCount, exams[]}`, 支持 `?format=ics`
+- `POST /jw/students` — 请求: `{name}`; 响应: `{count, students[]}`
+- `GET /jw/elective/projects` — 响应: 选课计划列表
+
+教学评测 (jxpc, JSON 课表接口; 整站挂瑞数 v5 WAF, 服务端用 sdenv 补环境自动求解):
+- `GET /jxpc/schedule/weeks` — 响应: `{current, weeks:[{week, startDate, endDate}]}`
+  (current = 按今天日期判定的当前教学周; weeks = 全学期周历, startDate/endDate 为该周周一/周日)
+- `POST /jxpc/schedule` — 请求: `{week?}` (缺省取当前周; `week:"all"` 遍历全学期, 每条课程附带 `week` 字段); 响应: `{week, weekStart, weekEnd, classCount, classes[]}`
+  (`week:"all"` 时为 `{week:"all", weekCount, classCount, classes[]}`), 支持 `?format=ics`;
+  课程项含 `weekday/date/startSection/sectionCount/startTime/endTime` 等字段, 节次→时间映射见 `config/schedule.json`
 
 支付: `GET /paym/userinfo` · `GET /paym/projects`
 
@@ -481,6 +495,8 @@ vercel deploy
 
 仓库已内置 `edgeone.json` 与 `cloud-functions/[[default]].ts` (Node.js Cloud Function, 全路径接管)。导入 Git 仓库时框架预设选 **Hono** 即可 (构建/输出配置由 `edgeone.json` 覆盖), 并在「环境变量」中配置 `SESSION_SECRET`。
 
+> **jxpc 端点部署注意**: `/jxpc/*` 依赖 [sdenv](https://github.com/pysunday/sdenv) 求解瑞数 WAF, 含原生模块 (`documentAll` 需 node-gyp 编译, `canvas` 用预编译二进制)。Vercel 构建镜像自带编译工具链, 正常可用; EdgeOne 云函数构建环境若不支持原生模块编译, 这些端点会加载失败 (不影响其它端点, sdenv 为懒加载)。
+
 ## 电费链路说明 (抓包分析)
 
 上游 C# 端未完成的电费功能已通过抓包补齐: 楼栋/房间/余额均改为**动态接口查询** (`payEleCostController`), 取代了 C# 端静态的 `RoomIds` 映射表与未完成的 `ConvertDomInfoToQuery` 智能转换, 数据不再有过期风险。注意: 该控制器要求请求体 `Content-Type: application/json`, 否则后端返回误导性的 "系统正在维护中" (messageCode=2)。
@@ -492,3 +508,6 @@ vercel deploy
 ## Licence
 
 [LICENSE](LICENSE)
+
+> [!WARNING]
+> [免责声明](./DISCLAIMER.md)
