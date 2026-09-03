@@ -1,0 +1,7 @@
+{
+  "name": "parse5",
+  "version": "8.0.1-cjs.1",
+  "description": "CJS bundle of parse5@8.0.1 (esbuild) — Vercel/EdgeOne bundlers cannot require() the ESM-only original from CJS.",
+  "main": "index.cjs",
+  "license": "MIT"
+}
