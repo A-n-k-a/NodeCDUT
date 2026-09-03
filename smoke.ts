@@ -11,6 +11,12 @@ import {
   buildCashierUrl,
   inferFloorFromRoomNo,
 } from "./src/services/elec.js";
+import {
+  addDays,
+  currentTeachingWeek,
+  mapJxpcClass,
+  type RawScheduleItem,
+} from "./src/services/jxpc.js";
 
 let failures = 0;
 function check(name: string, cond: boolean, extra?: unknown) {
@@ -147,4 +153,45 @@ for (const bad of ["12", "5", "abc", ""]) {
   check(`elec-infer-floor-非法输入"${bad}"报错`, threw);
 }
 
+// 8. jxpc 课表映射 (瑞数 WAF 后的 JSON API)
+check("jxpc-addDays-周内", addDays("2026-08-31", 6) === "2026-09-06");
+check("jxpc-addDays-跨月", addDays("2026-08-31", 1) === "2026-09-01");
+const jxpcWeeks = [
+  { week: 1, startDate: "2026-08-31", endDate: "2026-09-06" },
+  { week: 2, startDate: "2026-09-07", endDate: "2026-09-13" },
+];
+check(
+  "jxpc-当前周判定",
+  currentTeachingWeek(jxpcWeeks, new Date("2026-09-04T12:00:00+08:00")) === 1 &&
+    currentTeachingWeek(jxpcWeeks, new Date("2026-09-08T12:00:00+08:00")) === 2 &&
+    currentTeachingWeek(jxpcWeeks, new Date("2027-01-01T12:00:00+08:00")) === 1
+);
+const rawItem: RawScheduleItem = {
+  id: "7c9fb5710bde0284a7569d9c0af6f107",
+  kcid: "RX131012",
+  pkbh: "202620271000492",
+  kcmc: "日本影视名作鉴赏",
+  jsxm: "姜宇灵",
+  jsgh: "10201402127",
+  jxdd: "6A110",
+  xqj: 7,
+  ksjc: 9,
+  kccd: 3,
+  qsz: 1,
+};
+const mapped = mapJxpcClass(rawItem, "2026-08-31");
+check(
+  "jxpc-课表映射",
+  mapped.date === "2026-09-06" &&
+    mapped.startTime === "19:10" &&
+    mapped.endTime === "21:35" &&
+    mapped.weekday === 7 &&
+    mapped.startSection === 9 &&
+    mapped.sectionCount === 3,
+  mapped
+);
+check("jxpc-无周一时date为null", mapJxpcClass(rawItem).date === null);
+
 process.exit(failures ? 1 : 0);
+
+

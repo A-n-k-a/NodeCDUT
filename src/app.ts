@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import auth from "./routes/auth.js";
 import jw from "./routes/jw.js";
+import jxpc from "./routes/jxpc.js";
 import paym from "./routes/paym.js";
 import { SESSION_HEADER } from "./lib/session.js";
 import { SessionExpiredError } from "./lib/errors.js";
@@ -56,6 +57,8 @@ app.get("/", (c) =>
       "POST /jw/exams (?format=ics)",
       "POST /jw/students",
       "GET  /jw/elective/projects",
+      "GET  /jxpc/schedule/weeks",
+      "POST /jxpc/schedule (?format=ics)",
       "GET  /paym/userinfo",
       "GET  /paym/projects",
       "GET  /paym/electricity/projects",
@@ -128,6 +131,7 @@ app.get("/diag", async (c) => {
 
 app.route("/auth", auth);
 app.route("/jw", jw);
+app.route("/jxpc", jxpc);
 app.route("/paym", paym);
 
 export default app;
