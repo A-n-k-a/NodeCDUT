@@ -1,6 +1,7 @@
 {
   "buildCommand": "npm run build",
   "outputDirectory": "./public",
+  "nodeVersion": "24.11.0",
   "cloudFunctions": {
     "nodejs": {
       "maxDuration": 60
