@@ -1,0 +1,28 @@
+{
+  "version": "2026-2027-1",
+  "timezone": "Asia/Shanghai",
+  "semester": "通用",
+  "defaultSchedule": "main",
+  "schedules": {
+    "main": { 
+        "periods": [
+            { "section": 1,  "name": "第1节",  "start": "08:10", "end": "08:55", "days": [1,2,3,4,5] },
+            { "section": 2,  "name": "第2节",  "start": "09:00", "end": "09:45", "days": [1,2,3,4,5] },
+            { "section": 3,  "name": "第3节",  "start": "10:15", "end": "11:00", "days": [1,2,3,4,5] },
+            { "section": 4,  "name": "第4节",  "start": "11:05", "end": "11:50", "days": [1,2,3,4,5] },
+            { "section": 5,  "name": "第5节",  "start": "14:30", "end": "15:15", "days": [1,2,3,4,5] },
+            { "section": 6,  "name": "第6节",  "start": "15:20", "end": "16:05", "days": [1,2,3,4,5] },
+            { "section": 7,  "name": "第7节",  "start": "16:25", "end": "17:10", "days": [1,2,3,4,5] },
+            { "section": 8,  "name": "第8节",  "start": "17:15", "end": "18:00", "days": [1,2,3,4,5] },
+            { "section": 9,  "name": "第9节",  "start": "19:10", "end": "19:55", "days": [1,2,3,4,5] },
+            { "section": 10, "name": "第10节", "start": "20:00", "end": "20:45", "days": [1,2,3,4,5] },
+            { "section": 11, "name": "第11节", "start": "20:50", "end": "21:35", "days": [1,2,3,4,5] }
+        ],
+        "breaks": [
+            { "name": "午休", "start": "11:50", "end": "14:15" },
+            { "name": "傍晚", "start": "18:00", "end": "19:00" }
+        ] 
+    },
+    "yibin":  { "periods": [] }
+  }
+}
