@@ -496,7 +496,7 @@ vercel deploy
 仓库已内置 `edgeone.json` 与 `cloud-functions/[[default]].ts` (Node.js Cloud Function, 全路径接管)。导入 Git 仓库时框架预设选 **Hono** 即可 (构建/输出配置由 `edgeone.json` 覆盖), 并在「环境变量」中配置 `SESSION_SECRET`。
 
 > **jxpc 端点部署注意**: `/jxpc/*` 依赖 [sdenv](https://github.com/pysunday/sdenv) 求解瑞数 WAF, 含原生模块 (`documentAll` 需 node-gyp 编译, `canvas` 用预编译二进制)。Vercel 构建镜像自带编译工具链, 正常可用; EdgeOne 云函数构建环境若不支持原生模块编译, 这些端点会加载失败 (不影响其它端点, sdenv 为懒加载)。
-> sdenv 的依赖链要求 Node ≥ 20.19 (`require(esm)` 支持), 因此 `engines` 固定为 `22.x`; EdgeOne 等仅提供低版本 Node 运行时的平台无法使用 `/jxpc/*`。
+> sdenv 的依赖链要求 Node ≥ 20.19 (`require(esm)` 支持), 因此 `engines` 固定为 `24.x` (Vercel 与 EdgeOne 均提供, 与本地开发版本一致); 若平台只提供低版本 Node 运行时则无法使用 `/jxpc/*`。EdgeOne 侧仍需确认构建环境能否编译/加载原生模块。
 
 ## 电费链路说明 (抓包分析)
 
