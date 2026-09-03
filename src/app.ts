@@ -84,7 +84,9 @@ app.get("/", (c) =>
   })
 );
 
-app.get("/health", (c) => c.json({ ok: true, ts: Date.now() }));
+app.get("/health", (c) =>
+  c.json({ ok: true, ts: Date.now(), node: process.version })
+);
 
 app.get("/diag", async (c) => {
   const results: Record<string, unknown> = {};
