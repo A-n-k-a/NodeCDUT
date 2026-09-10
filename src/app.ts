@@ -4,6 +4,7 @@ import auth from "./routes/auth.js";
 import jw from "./routes/jw.js";
 import jxpc from "./routes/jxpc.js";
 import paym from "./routes/paym.js";
+import vle from "./routes/vle.js";
 import { SESSION_HEADER } from "./lib/session.js";
 import { SessionExpiredError } from "./lib/errors.js";
 
@@ -135,5 +136,6 @@ app.route("/auth", auth);
 app.route("/jw", jw);
 app.route("/jxpc", jxpc);
 app.route("/paym", paym);
+app.route("/vle", vle);
 
 export default app;

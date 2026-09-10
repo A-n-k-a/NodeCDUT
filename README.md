@@ -14,6 +14,7 @@
 |---|---|---|
 | `SESSION_SECRET` | 生产必填 | 会话 blob 加密密钥 (任意长随机串); 未设置时使用内置开发密钥并告警 |
 | `CORS_ORIGIN` | 否 | 允许的跨域来源, 默认 `*` |
+| `VLE_BASE_URL` | 否 | 中英学生网站 (VLE) 上游地址, 默认 `https://vle.zycdut.net` |
 
 ## 端点
 
@@ -23,6 +24,9 @@
 - `POST /auth/login` — 请求: `{username, password}`; 响应: `{success, studentId, session}` (session 同见于 `X-Auth-Cookies` 响应头)
 - `POST /auth/sms/send` — 请求: `{phone}`; 响应: `{success}`
 - `POST /auth/sms/login` — 请求: `{phone, code}`; 响应: `{success, studentId, session}`
+
+中英学生网站 (VLE, 独立于 CAS):
+- `POST /vle/login` — 请求: `{username, password}`; 响应: `{success, cookies[], html, session}` (html 为登录后 frontpage-alt 页面; session 同见于 `X-Auth-Cookies` 响应头, 后续 VLE 接口凭此访问); 失败: `401 {success: false, message}` (message 为上游错误原文, 如 `Sorry, unrecognized username or password.`)
 
 教务 (均需 `X-Auth-Cookies`):
 - `GET /jw/schedule/meta` — 响应: 学期/周次选项
